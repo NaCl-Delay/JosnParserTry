@@ -7,6 +7,7 @@
 #include <sstream>
 #include <iomanip>
 #include <stdexcept>
+#include <sstream>
 
 // 取布尔值
 bool Json::as_bool() const {
@@ -71,44 +72,47 @@ Json Json::parse(std::string_view source) {
 }
 
 std::string Json::dump(int indent) const {
+    std::ostringstream oss;
+
     switch (m_type) {
         case Type::Null:
-            return "null";
+            oss << "null";
+            break;
         case Type::Bool:
-            return std::get<bool>(m_value) ? "true" : "false";
+            oss << (std::get<bool>(m_value) ? "true" : "false");
+            break;
         case Type::Number: {
             double val = std::get<double>(m_value);
-            // 处理整数显示为 1 而不是 1.000000 的情况
-            if (val == static_cast<long long>(val)) {
-                return std::to_string(static_cast<long long>(val));
-            }
-            return std::to_string(val);
+            oss << val;
+            break;
         }
         case Type::String:
             // 简单处理：加上双引号
-            return "\"" + std::get<std::string>(m_value) + "\"";
+            oss << "\"" << std::get<std::string>(m_value) << "\"";
+            break;
         case Type::Array: {
-            std::string res = "[";
+            oss << "[";
             const auto& arr = std::get<array_type>(m_value);
             for (size_t i = 0; i < arr.size(); ++i) {
-                res += arr[i].dump(indent); // 递归调用
-                if (i < arr.size() - 1) res += ",";
+                oss << arr[i].dump(indent);
+                if (i < arr.size() - 1) {
+                    oss << ",";
+                };
             }
-            res += "]";
-            return res;
+            oss << "]";
+            break;
         }
         case Type::Object: {
-            std::string res = "{";
+            oss << "{";
             const auto& obj = std::get<object_type>(m_value);
             size_t i = 0;
             for (const auto& [key, value] : obj) {
-                res += "\"" + key + "\":" + value.dump(indent); // 递归调用
-                if (++i < obj.size()) res += ",";
+                oss << "\"" << key << "\":" << value.dump(indent); // 递归调用
+                if (++i < obj.size()) oss << ",";
             }
-            res += "}";
-            return res;
+            oss << "}";
+            break;
         }
-        default:
-            return "";
     }
+    return oss.str();
 }
