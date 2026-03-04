@@ -1,7 +1,6 @@
 #include <iostream>
 #include <string>
 #include "json.h"
-//空数组，空对象，无法解析
 
 int main() {
 #ifdef _WIN32
