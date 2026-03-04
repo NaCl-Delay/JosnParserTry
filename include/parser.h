@@ -27,16 +27,20 @@ enum class TokenType {
 struct Token {
     TokenType type;
     std::string_view value; // 直接指向原始字符串的一段，不拷贝，速度快
+    int line;
+    int column;
 };
 
 class Scanner {
     std::string_view src;
     size_t cursor = 0;
+    int line = 1;
+    int column = 1;
 
 public:
     Scanner(std::string_view s) : src(s) {}
+    char advance();
     Token next_token();
-
 private:
     void skip_whitespace();
 };

@@ -4,67 +4,140 @@
 
 #include "parser.h"
 
+// 消费掉当前字符，并返回它，同时为下一次做好准备
+// current 应该是 Scanner 刚刚吃掉的字符
+char Scanner::advance() {
+    char current = src[cursor];
+    if (current == '\n' || current == '\r') {
+        line++;
+        column = 1;
+    } else {
+        column++;
+    }
+    cursor++;
+    return current;
+}
+
 Token Scanner::next_token() {
     skip_whitespace(); // 自动跳过空格、换行
-    if (cursor >= src.size()) return {TokenType::EndInp, ""};
+    if (cursor >= src.size()) return {TokenType::EndInp, "",line,column};
 
     char c = src[cursor];
     switch (c) {
-        case '{': cursor++; return {TokenType::BeginObject, "{"};
-        case '}': cursor++; return {TokenType::EndObject, "}"};
-        case '[': cursor++; return {TokenType::BeginArray, "["};
-        case ']': cursor++; return {TokenType::EndArray, "]"};
-        case ':': cursor++; return {TokenType::Colon, ":"};
-        case ',': cursor++; return {TokenType::Comma, ","};
+        case '{': {
+            int l = line;
+            int col = column;
+            advance();
+            return {TokenType::BeginObject, "{", l, col};
+        }
+        case '}': {
+            int l = line;
+            int col = column;
+            advance();
+            return {TokenType::EndObject, "}", l, col};
+        }
+        case '[': {
+            int l = line;
+            int col = column;
+            advance();
+            return {TokenType::BeginArray, "[", l, col};
+        }
+        case ']': {
+            int l = line;
+            int col = column;
+            advance();
+            return {TokenType::EndArray, "]", l, col};
+        }
+        case ':': {
+            int l = line;
+            int col = column;
+            advance();
+            return {TokenType::Colon, ":", l, col};
+        }
+        case ',': {
+            int l = line;
+            int col = column;
+            advance();
+            return {TokenType::Comma, ",", l, col};
+        }
     }
 
-    //字符串
+
+    // 字符串
     if (c == '"') {
-        size_t start = ++cursor; //为什么是++cursor,即为什么要跳过 " ?.应该看parser_string
-        while (cursor < src.size() && src[cursor] != '"') {
-            cursor++; //cursor到了 " 就退出循环
-        }//eg. "hello" 0 1 2 3 4 5 6       start:1,   6 - 1 = 5.符合长度
-        std::string_view val = src.substr(start, cursor - start);
-        cursor++; //跳过结束的 "
-        return {TokenType::String, val};
-    }
+        int l = line;          // 保存起始行列
+        int col = column;
+        advance();             // 消耗开头的 "
 
-    //数字
-    if (std::isdigit(c) || c == '-' || c == '+') {
-        size_t start = cursor++; // 如果只有单独的-或+符号，会有bug
-        while (cursor < src.size() && (std::isdigit(src[cursor]) || src[cursor] == '.')) {
-            cursor++;
+        size_t start = cursor; // 字符串内容开始位置
+        while (cursor < src.size() && src[cursor] != '"') {
+            advance();         // 用 advance 移动，自动更新行列
+        }
+        if (cursor >= src.size()) {
+            // 这里可以用 l, col 报错，因为错误发生在开头的 " 处
+            throw std::runtime_error(
+               "Line " + std::to_string(l) +
+               ", Col " + std::to_string(col) +
+               ": Unterminated string"
+           );
         }
         std::string_view val = src.substr(start, cursor - start);
-        return {TokenType::Number, val};
+        advance();             // 消耗结束的 "
+        return {TokenType::String, val, l, col};
     }
 
-    //bool
+    // 数字
+    if (std::isdigit(c) || c == '-' || c == '+') {
+        int l = line;          // 保存起始行列
+        int col = column;
+        size_t start = cursor; // 记录起始索引
+        advance();             // 消耗第一个字符
+
+        while (cursor < src.size() && (std::isdigit(src[cursor]) || src[cursor] == '.')) {
+            advance();
+        }
+        std::string_view val = src.substr(start, cursor - start);
+        return {TokenType::Number, val, l, col};
+    }
+
+    // true
     if (src.substr(cursor, 4) == "true") {
-        cursor += 4;
-        return {TokenType::True, "true"};
+        int l = line;
+        int col = column;
+        for (int i = 0; i < 4; ++i) advance(); // 用 advance 逐个消耗
+        return {TokenType::True, "true", l, col};
     }
 
+    // false
     if (src.substr(cursor, 5) == "false") {
-        cursor += 5;
-        return {TokenType::False, "false"};
+        int l = line;
+        int col = column;
+        for (int i = 0; i < 5; ++i) advance();
+        return {TokenType::False, "false", l, col};
     }
 
-    //Null
+    // null
     if (src.substr(cursor, 4) == "null") {
-        cursor += 4;
-        return {TokenType::Null, "null"};
+        int l = line;
+        int col = column;
+        for (int i = 0; i < 4; ++i) advance();
+        return {TokenType::Null, "null", l, col};
     }
 
-    //其他 错误
-    throw std::runtime_error("Unexpected character");
-
+    // 其他错误
+    // 对于无法识别的字符，保存当前位置再抛出，方便定位
+    int l = line;
+    int col = column;
+    advance(); // 也可以不 advance，但通常我们会消耗掉这个非法字符以避免无限循环
+    throw std::runtime_error("Line " + std::to_string(l) +
+                ", Col " + std::to_string(col) +
+                ":Unexpected character" );
 }
 
 
 void Scanner::skip_whitespace() {
     while (cursor < src.size() && (src[cursor] == ' ' || src[cursor] == '\n' || src[cursor] == '\r' || src[cursor] == '\t')) {
-        cursor++;
+        advance();
     }
 }
 
@@ -112,7 +185,9 @@ Json Parser::parse_value() {
         case TokenType::True:        consume(); return Json(true);
         case TokenType::False:       consume(); return Json(false);
         case TokenType::Null:        consume(); return Json(nullptr);
-        default: throw std::runtime_error("Unexpected token");
+        default: throw std::runtime_error("Line " + std::to_string(lookahead.line) +
+                ", Col " + std::to_string(lookahead.column) +
+                ": Unexpected token");
     }
 }
 
@@ -124,14 +199,20 @@ Json Parser::parse_object() {
     while (lookahead.type != TokenType::EndObject) {
         // 1. 解析 Key
         if (lookahead.type != TokenType::String) {
-            throw std::runtime_error("Key must be a string");
+            throw std::runtime_error(
+                "Line " + std::to_string(lookahead.line) +
+                ", Col " + std::to_string(lookahead.column) +
+                ": Key must be a string"
+                );
         }
         std::string key = std::string(lookahead.value);
         consume(); // 吃掉 Key
 
         // 2. 吃掉 ':'
         if (lookahead.type != TokenType::Colon) {
-            throw std::runtime_error("Expected ':' after key");
+            throw std::runtime_error("Line " + std::to_string(lookahead.line) +
+                ", Col " + std::to_string(lookahead.column) +
+                ": Expected ':' after key");
         }
         consume();
 

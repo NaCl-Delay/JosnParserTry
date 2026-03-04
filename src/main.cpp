@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include "json.h"
+//空数组，空对象，无法解析
 
 int main() {
 #ifdef _WIN32
@@ -16,7 +17,7 @@ int main() {
         "is_active": true,
         "features": ["parsing", "serialization", "recursive"],
         "metadata": {
-            "author": "luolonghua",
+            "author" : "NaCl-Delay",
             "year": 2026
         },
         "nil_val": null
@@ -43,7 +44,7 @@ int main() {
 
         std::cout << "\n--- 序列化测试 (dump) ---" << std::endl;
         // 测试我们刚刚写好的 dump 函数
-        std::cout << data.dump() << std::endl;
+        std::cout << data.dump(2) << std::endl;
 
     } catch (const std::exception& e) {
         // 捕获 Scanner 或 Parser 抛出的异常
