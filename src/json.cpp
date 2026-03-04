@@ -71,48 +71,76 @@ Json Json::parse(std::string_view source) {
     return p.parse();
 }
 
-std::string Json::dump(int indent) const {
-    std::ostringstream oss;
+// 只在 json.cpp 内部使用，用来生成空格
+static std::string get_indent_str(int depth, int indent_size) {
+    if (indent_size <= 0) return "";
+    return std::string(depth * indent_size, ' ');
+}
+
+void Json::dump_internal(std::ostringstream& oss, int depth, int indent_size) const {
+    bool pretty = indent_size >= 0;
 
     switch (m_type) {
-        case Type::Null:
-            oss << "null";
+        case Type::Null:   oss << "null";
             break;
-        case Type::Bool:
-            oss << (std::get<bool>(m_value) ? "true" : "false");
+
+        case Type::Bool:   oss << (std::get<bool>(m_value) ? "true" : "false");
             break;
+
         case Type::Number: {
             double val = std::get<double>(m_value);
-            oss << val;
+            // 解决 1.000000 问题：如果是整数，去掉小数点
+            if (val == static_cast<long long>(val))
+                oss << static_cast<long long>(val);
+            else
+                oss << val;
             break;
         }
+
         case Type::String:
-            // 简单处理：加上双引号
             oss << "\"" << std::get<std::string>(m_value) << "\"";
             break;
+
         case Type::Array: {
-            oss << "[";
             const auto& arr = std::get<array_type>(m_value);
+            if (arr.empty()) { oss << "[]"; break; }
+
+            oss << "[";
+            if (pretty) oss << "\n";
             for (size_t i = 0; i < arr.size(); ++i) {
-                oss << arr[i].dump(indent);
-                if (i < arr.size() - 1) {
-                    oss << ",";
-                };
+                if (pretty) oss << get_indent_str(depth + 1, indent_size);
+                arr[i].dump_internal(oss, depth + 1, indent_size); // 递归：深度+1
+                if (i < arr.size() - 1) oss << ",";
+                if (pretty) oss << "\n";
             }
+            if (pretty) oss << get_indent_str(depth, indent_size); // 封口缩进回退
             oss << "]";
             break;
         }
         case Type::Object: {
-            oss << "{";
             const auto& obj = std::get<object_type>(m_value);
-            size_t i = 0;
+            if (obj.empty()) { oss << "{}"; break; }
+
+            oss << "{";
+            if (pretty) oss << "\n";
+            size_t count = 0;
             for (const auto& [key, value] : obj) {
-                oss << "\"" << key << "\":" << value.dump(indent); // 递归调用
-                if (++i < obj.size()) oss << ",";
+                if (pretty) oss << get_indent_str(depth + 1, indent_size);
+                oss << "\"" << key << "\": "; // 冒号后加空格美观
+                value.dump_internal(oss, depth + 1, indent_size);
+                if (++count < obj.size()) oss << ",";
+                if (pretty) oss << "\n";
             }
+            if (pretty) oss << get_indent_str(depth, indent_size);
             oss << "}";
             break;
         }
     }
+}
+
+// 用户调用的公开接口
+std::string Json::dump(int indent) const {
+    std::ostringstream oss;
+    dump_internal(oss, 0, indent); // 从深度 0 开始递归
     return oss.str();
 }
