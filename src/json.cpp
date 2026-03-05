@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <sstream>
 
+//报错未改
 // 取布尔值
 bool Json::as_bool() const {
     if (!is_bool()) throw std::runtime_error("Not a boolean");
@@ -77,6 +78,7 @@ static std::string get_indent_str(int depth, int indent_size) {
     return std::string(depth * indent_size, ' ');
 }
 
+//对于转义字符，未修改
 void Json::dump_internal(std::ostringstream& oss, int depth, int indent_size) const {
     bool pretty = indent_size >= 0;
 

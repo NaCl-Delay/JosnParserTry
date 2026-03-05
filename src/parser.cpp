@@ -4,6 +4,33 @@
 
 #include "parser.h"
 
+// 辅助函数，用于将 raw 字符串里的转义序列转换为实际字符
+static std::string decode_string(std::string_view raw) {
+    std::string res;
+    res.reserve(raw.size()); // 预分配空间，提升效率
+    for (size_t i = 0; i < raw.size(); ++i) {
+        if (raw[i] == '\\' && i + 1 < raw.size()) {
+            i++; // 跳过 '\'
+            switch (raw[i]) {
+                case '"':  res += '"'; break;
+                case '\\': res += '\\'; break;
+                case '/':  res += '/'; break;
+                case 'b':  res += '\b'; break;
+                case 'f':  res += '\f'; break;
+                case 'n':  res += '\n'; break;
+                case 'r':  res += '\r'; break;
+                case 't':  res += '\t'; break;
+                    // 注意：\uXXXX 的 Unicode 转义较为复杂，这里暂作保留或直接当作普通字符追加
+                default:   res += raw[i]; break;
+            }
+        } else {
+            res += raw[i];
+        }
+    }
+    return res;
+}
+
+
 // 消费掉当前字符，并返回它，同时为下一次做好准备
 // current 应该是 Scanner 刚刚吃掉的字符
 char Scanner::advance() {
@@ -70,8 +97,17 @@ Token Scanner::next_token() {
         advance();             // 消耗开头的 "
 
         size_t start = cursor; // 字符串内容开始位置
-        while (cursor < src.size() && src[cursor] != '"') {
-            advance();         // 用 advance 移动，自动更新行列
+        while (cursor < src.size()) {
+            if (src[cursor] == '\\') {
+                advance(); // 消耗'\'
+                if (cursor < src.size()) {
+                    advance(); //消耗被转义的字符
+                }
+            }else if (src[cursor] == '"') {
+                break; //未被转义的结束双引号，跳出
+            }else {
+                advance();//普通字符
+            }
         }
         if (cursor >= src.size()) {
             // 这里可以用 l, col 报错，因为错误发生在开头的 " 处
@@ -81,6 +117,7 @@ Token Scanner::next_token() {
                ": Unterminated string"
            );
         }
+        // 注意：这里拿到的 val 还是带有 '\' 和 'n' 两个字符的原始字符串
         std::string_view val = src.substr(start, cursor - start);
         advance();             // 消耗结束的 "
         return {TokenType::String, val, l, col};
@@ -164,7 +201,8 @@ Json Parser::parse_array() {
 }
 
 Json Parser::parse_string() {
-    std::string val(lookahead.value);
+    //修改：使用 decode_string
+    std::string val = decode_string(lookahead.value);
     consume();// 消费掉这个 String Token
     return Json(val);
 }
@@ -205,7 +243,7 @@ Json Parser::parse_object() {
                 ": Key must be a string"
                 );
         }
-        std::string key = std::string(lookahead.value);
+        std::string key = decode_string(lookahead.value);
         consume(); // 吃掉 Key
 
         // 2. 吃掉 ':'
