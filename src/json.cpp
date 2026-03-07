@@ -78,7 +78,33 @@ static std::string get_indent_str(int depth, int indent_size) {
     return std::string(depth * indent_size, ' ');
 }
 
-//对于转义字符，未修改
+
+// 将字符串写入 oss，自动处理转义（String 值和 Object key 共用）
+static void write_escaped_string(std::ostringstream& oss, const std::string& s) {
+    oss << "\"";
+    for (char c : s) {
+        switch (c) {
+            case '\"': oss << "\\\""; break;
+            case '\\': oss << "\\\\"; break;
+            case '\b': oss << "\\b";  break;
+            case '\f': oss << "\\f";  break;
+            case '\n': oss << "\\n";  break;
+            case '\r': oss << "\\r";  break;
+            case '\t': oss << "\\t";  break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
+                    oss << buf;
+                } else {
+                    oss << c;
+                }
+                break;
+        }
+    }
+    oss << "\"";
+}
+
 void Json::dump_internal(std::ostringstream& oss, int depth, int indent_size) const {
     bool pretty = indent_size >= 0;
 
@@ -99,9 +125,10 @@ void Json::dump_internal(std::ostringstream& oss, int depth, int indent_size) co
             break;
         }
 
-        case Type::String:
-            oss << "\"" << std::get<std::string>(m_value) << "\"";
+        case Type::String: {
+            write_escaped_string(oss, std::get<std::string>(m_value));
             break;
+        }
 
         case Type::Array: {
             const auto& arr = std::get<array_type>(m_value);
@@ -128,7 +155,8 @@ void Json::dump_internal(std::ostringstream& oss, int depth, int indent_size) co
             size_t count = 0;
             for (const auto& [key, value] : obj) {
                 if (pretty) oss << get_indent_str(depth + 1, indent_size);
-                oss << "\"" << key << "\": "; // 冒号后加空格美观
+                write_escaped_string(oss, key);
+                oss << ": ";
                 value.dump_internal(oss, depth + 1, indent_size);
                 if (++count < obj.size()) oss << ",";
                 if (pretty) oss << "\n";

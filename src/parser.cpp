@@ -5,29 +5,76 @@
 #include "parser.h"
 
 // 辅助函数，用于将 raw 字符串里的转义序列转换为实际字符
-static std::string decode_string(std::string_view raw) {
-    std::string res;
-    res.reserve(raw.size()); // 预分配空间，提升效率
+static std::string unescape_string(std::string_view raw) {
+    std::string result;
+    result.reserve(raw.size());
+
     for (size_t i = 0; i < raw.size(); ++i) {
         if (raw[i] == '\\' && i + 1 < raw.size()) {
             i++; // 跳过 '\'
             switch (raw[i]) {
-                case '"':  res += '"'; break;
-                case '\\': res += '\\'; break;
-                case '/':  res += '/'; break;
-                case 'b':  res += '\b'; break;
-                case 'f':  res += '\f'; break;
-                case 'n':  res += '\n'; break;
-                case 'r':  res += '\r'; break;
-                case 't':  res += '\t'; break;
-                    // 注意：\uXXXX 的 Unicode 转义较为复杂，这里暂作保留或直接当作普通字符追加
-                default:   res += raw[i]; break;
+                case '"':  result += '"';  break;
+                case '\\': result += '\\'; break;
+                case '/':  result += '/';  break;
+                case 'b':  result += '\b'; break;
+                case 'f':  result += '\f'; break;
+                case 'n':  result += '\n'; break;
+                case 'r':  result += '\r'; break;
+                case 't':  result += '\t'; break;
+                case 'u': {
+                    auto parse_hex4 = [&](size_t pos) -> int {
+                        if (pos + 4 > raw.size()) return -1;
+                        int val = 0;
+                        for (int j = 0; j < 4; ++j) {
+                            char c = raw[pos + j];
+                            val <<= 4;
+                            if (c >= '0' && c <= '9') val |= (c - '0');
+                            else if (c >= 'a' && c <= 'f') val |= (c - 'a' + 10);
+                            else if (c >= 'A' && c <= 'F') val |= (c - 'A' + 10);
+                            else return -1;
+                        }
+                        return val;
+                    };
+
+                    int cp = parse_hex4(i + 1);
+                    if (cp != -1) {
+                        i += 4;
+                        // 处理 UTF-16 代理对
+                        if (cp >= 0xD800 && cp <= 0xDBFF) {
+                            if (i + 2 < raw.size() && raw[i + 1] == '\\' && raw[i + 2] == 'u') {
+                                int cp2 = parse_hex4(i + 3);
+                                if (cp2 >= 0xDC00 && cp2 <= 0xDFFF) {
+                                    cp = (((cp - 0xD800) << 10) | (cp2 - 0xDC00)) + 0x10000;
+                                    i += 6;
+                                }
+                            }
+                        }
+                        // UTF-8 编码转换 (支持 1-4 字节)
+                        if (cp <= 0x7F) {
+                            result += static_cast<char>(cp);
+                        } else if (cp <= 0x7FF) {
+                            result += static_cast<char>(0xC0 | (cp >> 6));
+                            result += static_cast<char>(0x80 | (cp & 0x3F));
+                        } else if (cp <= 0xFFFF) {
+                            result += static_cast<char>(0xE0 | (cp >> 12));
+                            result += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+                            result += static_cast<char>(0x80 | (cp & 0x3F));
+                        } else {
+                            result += static_cast<char>(0xF0 | (cp >> 18));
+                            result += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+                            result += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+                            result += static_cast<char>(0x80 | (cp & 0x3F));
+                        }
+                    }
+                    break;
+                }
+                default: result += raw[i]; break;
             }
         } else {
-            res += raw[i];
+            result += raw[i];
         }
     }
-    return res;
+    return result;
 }
 
 
@@ -202,7 +249,7 @@ Json Parser::parse_array() {
 
 Json Parser::parse_string() {
     //修改：使用 decode_string
-    std::string val = decode_string(lookahead.value);
+    std::string val = unescape_string(lookahead.value);
     consume();// 消费掉这个 String Token
     return Json(val);
 }
@@ -243,7 +290,7 @@ Json Parser::parse_object() {
                 ": Key must be a string"
                 );
         }
-        std::string key = decode_string(lookahead.value);
+        std::string key = unescape_string(lookahead.value);
         consume(); // 吃掉 Key
 
         // 2. 吃掉 ':'
