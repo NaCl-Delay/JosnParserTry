@@ -143,12 +143,31 @@ Token Scanner::next_token() {
         return {TokenType::String, val, l, content_col};
     }
 
-    if (std::isdigit(c) || c == '-' || c == '+') {
+    if (std::isdigit(c) || c == '-') {
         int l=line, col=column;
         size_t start = cursor;
-        advance();
-        while (cursor < src.size() && (std::isdigit(src[cursor]) || src[cursor] == '.'))
+        advance(); // 消耗 '-' 或第一个数字
+        while (cursor < src.size() && std::isdigit(src[cursor]))
             advance();
+        // 小数部分
+        if (cursor < src.size() && src[cursor] == '.') {
+            advance();
+            while (cursor < src.size() && std::isdigit(src[cursor]))
+                advance();
+        }
+        // 科学计数法 e/E，后面可跟可选的 +/-
+        if (cursor < src.size() && (src[cursor] == 'e' || src[cursor] == 'E')) {
+            advance();
+            if (cursor < src.size() && (src[cursor] == '+' || src[cursor] == '-'))
+                advance();
+            if (cursor >= src.size() || !std::isdigit(src[cursor])) {
+                throw std::runtime_error("Line " + std::to_string(l) +
+                    ", Col " + std::to_string(col) +
+                    ": Invalid number: exponent has no digits");
+            }
+            while (cursor < src.size() && std::isdigit(src[cursor]))
+                advance();
+        }
         return {TokenType::Number, src.substr(start, cursor - start), l, col};
     }
 
