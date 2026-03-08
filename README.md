@@ -1,6 +1,53 @@
-# JSON 解析器
+# SAST2026 - C++ 组寒假大作战项目：JSON 解析器
 
 一个用 C++17 实现的轻量级 JSON 解析器，支持标准 JSON 的解析、数据访问和序列化。
+
+本项目作为寒假 woc 任务，旨在深入理解 JSON 语法规范及 C++ 现代特性的实践应用。
+
+---
+
+## 试题要求
+
+### 题目描述
+实现一个 JSON 解析器，能够解析标准 JSON 格式的字符串，并提供便捷的数据访问接口。
+### 功能要求
+
+#### 【基础要求】
+
+支持解析 JSON 的六种基本类型： null boolean (true/false) number (整数和浮点数) string (包含转义字符处理) array object
+
+提供友好的数据访问 API
+
+解析失败时提供有意义的错误信息（包含行号/列号）
+
+支持将解析后的对象序列化回 JSON 字符串
+
+#### 【进阶要求】
+
+支持 JSON 注释（// 和 /* */）
+
+支持尾随逗号
+
+支持 JSON Pointer (RFC 6901) 查询
+
+支持从文件读取解析
+
+ 实现迭代器支持，可用于范围 for 循环
+
+【挑战要求】
+
+ 实现 SAX 风格的流式解析接口
+
+性能优化：使用 string_view 减少拷贝
+
+支持 JSON Schema 验证
+
+#### 技术要求
+可以参考第三方 JSON 库（如 nlohmann/json, rapidjson 等）
+
+可以使用 STL 标准库
+
+建议使用递归下降解析法
 
 ---
 
@@ -57,7 +104,12 @@ woc-JsonParser/
 
 ---
 
-## 编译与运行
+##  开发环境与构建
+
+本项目使用 **CMake** 作为构建系统，开发与调试均在 **CLion** 环境下完成。
+
+* **C++ 标准**：C++17 (深度使用了 `std::variant`, `std::optional` 等特性以保证类型安全)
+* **编译器推荐**：GCC 8+ / Clang 7+ / MSVC 19.14+
 
 ### 使用 CMake（推荐）
 
@@ -70,7 +122,7 @@ cmake --build .
 ### 运行主程序（使用示例）
 
 ```bash
-./JosnParserTry
+./JsonParserTry
 ```
 
 ### 运行测试
@@ -79,7 +131,6 @@ cmake --build .
 ./JsonTest
 ```
 
----
 
 ## 使用示例
 
@@ -122,3 +173,8 @@ try {
 - **语法分析（Parser）**：递归下降解析，按照 JSON 语法规则递归构建 Json 对象
 - **数据存储**：使用 `std::variant` 存储六种类型，避免手动内存管理
 - **性能优化**：Token 的 `value` 字段使用 `std::string_view` 直接指向原始字符串，减少拷贝
+
+---
+## 声明
+
+这个项目的完成使用了 Gemini , DeepSeek , Claude 这些 AI 的网页版 
