@@ -3,6 +3,7 @@
 //
 
 #include "parser.h"
+#include <stdexcept>
 
 // token_line/token_col: 字符串内容（不含开头的 "）在源码中的起始位置
 static std::string unescape_string(std::string_view raw, int token_line, int token_col) {
